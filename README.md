@@ -89,6 +89,9 @@ At each stage I addressed shortcomings of the previous approach while monitoring
 
 ---
 
+> ⏱️ **Note**: Each approach in this repository was trained for only **3 epochs** due to time and resource constraints. Despite this, the results already reveal promising trends in low-bit training. I believe the community can build on these implementations — running longer training schedules, tuning hyperparameters, and applying these ideas to larger tasks — to unlock even better performance and deeper insights into ultra-low precision NLP.
+
+
 ## 📊 Result Table
 
 | # | Model / Technique                                                                    | Acc. | F1  |
