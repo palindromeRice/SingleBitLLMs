@@ -106,5 +106,14 @@ At each stage I addressed shortcomings of the previous approach while monitoring
 | 8 | Ternary BERT (+ Activation Quant)                                                     | 50.92 | 34.36 |
 
 
+---
+
+## ⚠️ Notebook Rendering Issue on GitHub
+
+Due to a known compatibility issue with Jupyter widgets metadata (`metadata.widgets.state` missing), GitHub is currently **unable to render the notebook properly on the web interface**.
+
+📌 **Workaround**:  
+To view and run the notebook without errors, please **clone the repository locally** and open the notebook in **VS Code**, **JupyterLab**, or another local IDE.
+
 
 
