@@ -1,119 +1,77 @@
-# 🧠 Single-Bit Quantization in NLP: Experiments & Insights
+# Single-Bit Quantization of Transformers/BERT
 
-## 📌 Overview
-Microsoft’s **BitNet b1.58** — a *1.58-bit* large-language model (LLM) capable of running on commodity CPUs — reignited interest in ultra-low-precision inference.  
-Inspired by this work, I explored **single-bit (and ternary) quantization** on the SST-2 sentiment-analysis task.  
-This repo walks through **eight progressively refined approaches**, starting from scratch-built transformers and culminating in a quantized, fine-tuned BERT.
+Eight progressively refined experiments in single-bit and ternary weight quantization for sentiment
+classification on SST-2, inspired by BitNet b1.58. Scratch-built 1-bit transformers top out at
+76.38% accuracy; replacing the dense layers of a pre-trained `bert-base-uncased` with sign-only
+weights trained through a straight-through estimator (STE) reaches **85.67% accuracy and 85.65% F1**.
 
----
+## Why
 
-## 🧪 Experimentation Strategy
-1. **Baseline** – scratch-built transformer + 1-bit weights.  
-2. **Incremental tricks** – add positional encoding, dropout, mixed precision, QAT.  
-3. **Advanced tricks** – median-scaling, Straight-Through Estimator (STE), progressive Mixed-precision Quantization (MoQ).  
-4. **Pre-trained models** – swap in BERT, then apply STE / ternary + activation quantization.
+BitNet b1.58 showed that language models with ternary weights can match full-precision quality at
+scale. This project asks the small-scale version of that question: on a standard classification
+task, which training tricks keep a 1-bit model useful, and does pre-training survive binarization.
 
-At each stage I addressed shortcomings of the previous approach while monitoring accuracy/F1, model size, and training stability.
+## How it works
 
----
+Every linear layer is replaced by a `BitLinear` layer whose weights are reduced to their sign (or to
+{-1, 0, +1} in the ternary variant). Each approach keeps the previous setup and changes one thing,
+so the table reads as an ablation:
 
-## 🔍 Detailed Approaches
+- Approaches 1 to 3: a scratch transformer encoder with 1-bit weights, then positional encoding and
+  mixed precision, then dropout and quantization-aware training.
+- Approaches 4 and 5: median scaling of activations plus STE, so gradients flow through the sign
+  function, and a tuned variant.
+- Approach 6: full multi-head attention with progressive precision lowering (8, 4, then 1 bit).
+- Approaches 7 and 8: pre-trained BERT with 1-bit weights and STE, then ternary weights with
+  activation quantization.
 
-<details>
-<summary><strong>Approach 1 – Simple Quantized Transformer (Classifier)</strong></summary>
+```mermaid
+flowchart LR
+    A[Scratch 1-bit transformer] --> B[+ positional encoding, AMP]
+    B --> C[+ dropout, QAT]
+    C --> D[+ median scaling, STE]
+    D --> E[+ multi-head attention, progressive MoQ]
+    E --> F[Pre-trained BERT, 1-bit + STE]
+    F --> G[Ternary BERT + activation quant]
+```
 
-* **Goal** – prove 1-bit feasibility.  
-* **Key steps**
-  * Scratch implementation of a miniature Transformer encoder.
-  * Replaced all linear layers with custom <code>BitLinear</code> (sign-only weights).
-  * Adam + CE loss; no fancy schedulers.
-* **Results** – <br>Accuracy 76.38 % | F1 76.38 %  
-* **Takeaway** – works, but capacity is tiny and no positional clues → limited ceiling.
-</details>
+## Evaluation and results
 
-<details>
-<summary><strong>Approach 2 – + Positional Encoding & Mixed Precision</strong></summary>
+Models are trained on the GLUE SST-2 train split and scored on its validation split. Every approach
+was trained for 3 epochs.
 
-* Added sinusoidal PE, automatic mixed precision (AMP), scheduler + grad-clip.  
-* **Results** – 62.27 % / 61.26 %.  
-* **Why worse?** AMP introduced instability with sign-only weights; capacity still low.
-</details>
+| # | Model / technique | Accuracy | F1 |
+|:-:|---|:-:|:-:|
+| 1 | Scratch transformer, 1-bit weights | 76.38 | 76.38 |
+| 2 | + positional encoding and AMP | 62.27 | 61.26 |
+| 3 | + dropout and QAT | 63.88 | 63.65 |
+| 4 | + median scaling and STE | 69.84 | 69.65 |
+| 5 | Tuned variant of 4 | 70.76 | 70.66 |
+| 6 | + multi-head attention and progressive MoQ | 70.18 | 70.15 |
+| 7 | **BERT-base, 1-bit weights + STE** | **85.67** | **85.65** |
+| 8 | Ternary BERT + activation quantization | 50.92 | 34.36 |
 
-<details>
-<summary><strong>Approach 3 – + Dropout & Quantization-Aware Training (QAT)</strong></summary>
+Pre-training is the largest single factor: the same 1-bit treatment applied to BERT beats every
+scratch model by about 15 points. Mixed precision destabilized sign-only training (approach 2), and
+quantizing activations as well as weights collapsed the model to near chance (approach 8).
 
-* Injected dropout; trained with fake-quant ops (PyTorch QAT).  
-* **Results** – 63.88 % / 63.65 %.  
-* **Takeaway** – tiny bump; still under-fits.
-</details>
+## Limitations
 
-<details>
-<summary><strong>Approach 4 – Median Scaling + Straight-Through Estimator (STE)</strong></summary>
+- Each approach was trained for only 3 epochs; longer schedules may change the ranking.
+- One run per approach, so differences of a point or two are within run-to-run noise.
+- Weights are binarized in simulation; the project measures accuracy, not memory or speed on real
+  low-bit kernels.
+- A single task (SST-2 sentiment); results may not transfer to generation or harder benchmarks.
 
-* Normalised activations via median scaling; back-prop with STE.  
-* **Results** – 69.84 % / 69.65 %.  
-* **Takeaway** – big jump → scaling + STE help gradients flow in 1-bit nets.
-</details>
+## License and citation
 
-<details>
-<summary><strong>Approach 5 – Variant of (4)</strong></summary>
+Released under the MIT License (see `LICENSE`). If you use this work, please cite:
 
-* Tweaked scaling factor & clipping range.  
-* **Results** – 70.76 % / 70.66 %.  
-* **Takeaway** – careful hyper-tuning matters even in low-bit land.
-</details>
-
-<details>
-<summary><strong>Approach 6 – Multi-Head Attention & Progressive MoQ</strong></summary>
-
-* Upgraded to full MH-Attention encoder; progressively lowered precision (8→4→1-bit) during fine-tuning.  
-* **Results** – 70.18 % / 70.15 %.  
-* **Takeaway** – capacity ↑, but extra heads partly cancelled by quantization loss.
-</details>
-
-<details>
-<summary><strong>Approach 7 – Pre-trained BERT (+ STE)</strong></summary>
-
-* Started from <code>bert-base-uncased</code>; swapped every dense/attn projection to BitLinear; STE for back-prop.  
-* **Results** – **85.67 % / 85.65 %** (best).  
-* **Takeaway** – pre-training supplies strong linguistic priors; 1-bit layers fine-tune well with STE.
-</details>
-
-<details>
-<summary><strong>Approach 8 – Ternary BERT (+ Activation Quant)</strong></summary>
-
-* Pushed further: ternary weights {-1,0,+1} + per-layer activation quant + sub-layer norm.  
-* **Results** – 50.92 % / 34.36 %.  
-* **Takeaway** – too aggressive; activation quant hurt expressive power.
-</details>
-
----
-
-> ⏱️ **Note**: Each approach in this repository was trained for only **3 epochs** due to time and resource constraints. Despite this, the results already reveal promising trends in low-bit training. I believe the community can build on these implementations — running longer training schedules, tuning hyperparameters, and applying these ideas to larger tasks — to unlock even better performance and deeper insights into ultra-low precision NLP.
-
-
-## 📊 Result Table
-
-| # | Model / Technique                                                                    | Acc. | F1  |
-|:-:|---------------------------------------------------------------------------------------|:---:|:---:|
-| 1 | Scratch Transformer + 1-bit weights                                                  | 76.38 | 76.38 |
-| 2 | + PosEnc & AMP                                                                        | 62.27 | 61.26 |
-| 3 | + Dropout & QAT                                                                       | 63.88 | 63.65 |
-| 4 | + Median Scaling & STE                                                                | 69.84 | 69.65 |
-| 5 | Variant of 4                                                                          | 70.76 | 70.66 |
-| 6 | + MH-Attention & Progressive MoQ                                                     | 70.18 | 70.15 |
-| 7 | **BERT-base + STE-quantized**                                                         | **85.67** | **85.65** |
-| 8 | Ternary BERT (+ Activation Quant)                                                     | 50.92 | 34.36 |
-
-
----
-
-## ⚠️ Notebook Rendering Issue on GitHub
-
-Due to a known compatibility issue with Jupyter widgets metadata (`metadata.widgets.state` missing), GitHub is currently **unable to render the notebook properly on the web interface**.
-
-📌 **Workaround**:  
-To view and run the notebook without errors, please **clone the repository locally** and open the notebook in **VS Code**, **JupyterLab**, or another local IDE.
-
-
-
+```bibtex
+@misc{chawla2025singlebit,
+  author       = {Chawla, Naman},
+  title        = {Single-Bit Quantization of Transformers/BERT},
+  year         = {2025},
+  howpublished = {\url{https://github.com/palindromeRice/SingleBitLLMs}}
+}
+```
