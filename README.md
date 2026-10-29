@@ -63,15 +63,19 @@ quantizing activations as well as weights collapsed the model to near chance (ap
   low-bit kernels.
 - A single task (SST-2 sentiment); results may not transfer to generation or harder benchmarks.
 
-## License and citation
+## License
 
-Released under the MIT License (see `LICENSE`). If you use this work, please cite:
+Code and results are released under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE).
+
+## Citation
 
 ```bibtex
 @misc{chawla2025singlebit,
-  author       = {Chawla, Naman},
+  author       = {Naman Chawla},
   title        = {Single-Bit Quantization of Transformers/BERT},
   year         = {2025},
   howpublished = {\url{https://github.com/palindromeRice/SingleBitLLMs}}
 }
 ```
+
+Machine-readable citation metadata is in [CITATION.cff](CITATION.cff).

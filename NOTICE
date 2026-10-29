@@ -1,0 +1,13 @@
+SingleBitLLMs
+Copyright 2025 Naman Chawla
+
+This product includes software developed by Naman Chawla
+(https://github.com/palindromeRice/SingleBitLLMs).
+
+If you use this code, its results, or derived work in a publication,
+please cite:
+
+  Naman Chawla. 2025. Single-Bit Quantization of Transformers/BERT.
+  https://github.com/palindromeRice/SingleBitLLMs
+
+Citation metadata is in CITATION.cff.
